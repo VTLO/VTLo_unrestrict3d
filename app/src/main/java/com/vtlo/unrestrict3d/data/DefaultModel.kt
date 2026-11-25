@@ -13,15 +13,15 @@ import java.net.URL
 import kotlin.coroutines.coroutineContext
 
 /**
- * The built-in model. A 5 GB file cannot live inside an APK (zip/install limits), so it is
+ * The built-in model. A 3.7 GB file cannot live inside an APK (zip/install limits), so it is
  * hardcoded here and fetched once, with resume, into private storage, then loaded like any other.
  */
 object DefaultModel {
     const val NAME = "VTLO core"
     const val FILE = "vtlo-core.litertlm"
     const val URL_STR =
-        "https://huggingface.co/nqd145/Gemma-4-E2B-it-abliterated-litertlm/resolve/main/Gemma-4-E2B-it-abliterated.litertlm"
-    const val SIZE_BYTES = 5_065_244_672L
+        "https://huggingface.co/olekk/gemma-4-E4B-it-abliterated-litert-lm/resolve/main/gemma-4-E4B-it-abliterated.litertlm"
+    const val SIZE_BYTES = 3_659_530_240L
     const val MIN_RAM_GB = 8
 }
 

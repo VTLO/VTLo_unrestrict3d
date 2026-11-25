@@ -245,7 +245,7 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
     fun downloadDefault() {
         busyJob = viewModelScope.launch {
             KeepAlive.acquire(app, "Downloading ${DefaultModel.NAME}…")
-            _state.update { it.copy(busyLabel = "DOWNLOADING ${DefaultModel.NAME.uppercase()}  (5.1 GB)", importProgress = 0f) }
+            _state.update { it.copy(busyLabel = "DOWNLOADING ${DefaultModel.NAME.uppercase()}  (3.7 GB)", importProgress = 0f) }
             try {
                 val f = downloader.download { p -> _state.update { it.copy(importProgress = p) } }
                 _state.update { it.copy(models = store.list(), busyLabel = null, importProgress = null, defaultInstalled = true) }

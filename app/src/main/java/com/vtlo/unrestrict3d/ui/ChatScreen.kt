@@ -295,7 +295,7 @@ private fun Footer(state: UiState, a: ChatActions) {
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 12.dp, top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!hasModel && state.busyLabel == null) {
-            if (!state.defaultInstalled) CtaButton("[ DOWNLOAD BUILT-IN: ${DEFAULT_LABEL} · 5.1 GB ]", a.onDownloadDefault)
+            if (!state.defaultInstalled) CtaButton("[ DOWNLOAD BUILT-IN: ${DEFAULT_LABEL} · 3.7 GB ]", a.onDownloadDefault)
             CtaButton("[ IMPORT MY OWN LITERT MODEL ]", a.onPickModel, primary = false)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

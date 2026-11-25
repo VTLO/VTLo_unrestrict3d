@@ -94,7 +94,7 @@ fun SettingsSheet(state: UiState, a: SettingsActions) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Header("MODEL")
-            if (!state.defaultInstalled) Action("↓ DOWNLOAD VTLO CORE (5.1 GB)", primary = true, onClick = a.onDownloadDefault)
+            if (!state.defaultInstalled) Action("↓ DOWNLOAD VTLO CORE (3.7 GB)", primary = true, onClick = a.onDownloadDefault)
             Action("+ IMPORT MODEL FILE  (.litertlm)", onClick = a.onPickModel)
             state.models.forEach { m ->
                 ModelRow(m, active = m.path == s.lastModelPath, a.onLoad, a.onDelete)

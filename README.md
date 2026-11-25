@@ -15,8 +15,8 @@ The header carries an animated banner (cross-fading reference pictures, slow pan
 JDK 17+ and Android SDK (platform 35). `.github/workflows/build-apk.yml` builds the APK on GitHub.
 
 ## Model
-- **Built-in model** (VTLO core, `.litertlm`, ~5.07 GB, 8 GB+ RAM recommended). It is the app's model and is loaded automatically once installed.
-  A 5 GB file cannot live inside an APK, so its URL is hardcoded (`data/DefaultModel.kt`): one tap
+- **Built-in model** (VTLO core, `.litertlm`, ~3.66 GB, 8 GB+ RAM recommended). It is the app's model and is loaded automatically once installed.
+  A 3.7 GB file cannot live inside an APK, so its URL is hardcoded (`data/DefaultModel.kt`): one tap
   downloads it (resumable, Wi-Fi advised) into private storage and it auto-loads afterwards.
   INTERNET is used for that download only.
 
