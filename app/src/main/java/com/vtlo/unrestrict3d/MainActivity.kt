@@ -35,6 +35,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.ai.edge.litertlm.*
+import com.vtlo.unrestrict3d.skills.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,7 +51,9 @@ private val BG = Color(0xFF111112)
 private val TEXT = Color(0xFFF2F2EC)
 private val OLIVE = Color(0xFFB2C99C)
 
-data class ChatMsg(val text: String, val fromUser: Boolean, val streaming: Boolean = false)
+data class ChatMsg(val text: String, val fromUser: Boolean, val streaming: Boolean = false, val tools: String = "")
+
+data class SkillRow(val name: String, val description: String, val enabled: Boolean, val needsSecret: Boolean, val secretHint: String, val secret: String)
 
 data class UiState(
     val status: String = "Starting…",
@@ -59,6 +64,11 @@ data class UiState(
     val generating: Boolean = false,
     val importing: Boolean = false,
     val importMb: Long = 0,
+    val skillsOn: Boolean = false,
+    val skills: List<SkillRow> = emptyList(),
+    val mcp: List<McpServer> = emptyList(),
+    val skillsMsg: String = "",
+    val skillsBusy: Boolean = false,
 )
 
 /** LiteRT-LM engine + streaming chat state (engine code identical to the tested build). */
@@ -68,8 +78,81 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private var engine: Engine? = null
     private var conversation: Conversation? = null
     private val modelFile = File(app.getExternalFilesDir(null), "model.litertlm")
+    private val store = SkillStore(app)
+    @Volatile private var curIdx = -1
+    private var skillsDirty = false
+
+    private fun toolUsed(note: String) {
+        val i = curIdx
+        replace(i) { it.copy(tools = it.tools + "⚙ " + note + "\n") }
+    }
+
+    private fun makeConversation(e: Engine): Conversation {
+        val sampler = SamplerConfig(topK = 64, topP = 0.95, temperature = 1.0)
+        if (store.skillsOn) {
+            runCatching {
+                val t = AgentTools(getApplication(), store) { toolUsed(it) }
+                val tools = t.build()
+                val c = e.createConversation(
+                    ConversationConfig(systemInstruction = Contents.of(t.systemPrompt()), tools = tools, samplerConfig = sampler)
+                )
+                _ui.update { it.copy(skillsMsg = "Skills on · ${tools.size} tools" + (if (t.mcpNote.isNotEmpty()) " · " + t.mcpNote else "")) }
+                return c
+            }.onFailure { err -> _ui.update { it.copy(skillsMsg = "Skills failed (${err.message}); running without tools") } }
+        }
+        return e.createConversation(ConversationConfig(samplerConfig = sampler))
+    }
+
+    fun refreshSkills() = _ui.update {
+        it.copy(
+            skillsOn = store.skillsOn,
+            skills = store.list().map { s -> SkillRow(s.name, s.description, store.enabled(s.name), s.requireSecret, s.secretDescription, store.secret(s.name)) },
+            mcp = store.mcpServers(),
+        )
+    }
+
+    private fun skillsJob(label: String, block: suspend () -> String) {
+        viewModelScope.launch {
+            _ui.update { it.copy(skillsBusy = true, skillsMsg = label) }
+            val msg = withContext(Dispatchers.IO) { runCatching { block() }.getOrElse { e -> "Failed: ${e.message}" } }
+            refreshSkills(); skillsDirty = true
+            _ui.update { it.copy(skillsBusy = false, skillsMsg = msg) }
+        }
+    }
+
+    fun setSkillsOn(on: Boolean) { store.skillsOn = on; skillsDirty = true; refreshSkills() }
+    fun toggleSkill(n: String, on: Boolean) { store.setEnabled(n, on); skillsDirty = true; refreshSkills() }
+    fun setSecret(n: String, v: String) { store.setSecret(n, v); skillsDirty = true }
+    fun deleteSkill(n: String) { store.delete(n); skillsDirty = true; refreshSkills() }
+    fun addSkillUrl(u: String) = skillsJob("Installing…") { "Installed ${store.installFromUrl(u).name}" }
+    fun importSkillTree(uri: Uri) = skillsJob("Importing…") { "Installed ${store.installFromTree(uri).name}" }
+    fun addMcp(name: String, url: String, token: String) {
+        if (name.isBlank() || url.isBlank()) return
+        store.addMcp(McpServer(name.trim(), url.trim(), token.trim())); skillsDirty = true; refreshSkills()
+    }
+    fun delMcp(n: String) { store.delMcp(n); skillsDirty = true; refreshSkills() }
+
+    /** Rebuilds the conversation with the current skills/tools (the model starts a fresh context). */
+    fun applySkills() {
+        if (!skillsDirty) return
+        val e = engine ?: return
+        if (_ui.value.generating) return
+        skillsDirty = false
+        viewModelScope.launch {
+            _ui.update { it.copy(skillsBusy = true, skillsMsg = "Applying…") }
+            withContext(Dispatchers.IO) {
+                runCatching { conversation?.close() }
+                conversation = runCatching { makeConversation(e) }.getOrElse { err ->
+                    _ui.update { it.copy(skillsMsg = "Apply failed: ${err.message}") }
+                    e.createConversation(ConversationConfig(samplerConfig = SamplerConfig(topK = 64, topP = 0.95, temperature = 1.0)))
+                }
+            }
+            _ui.update { it.copy(skillsBusy = false, messages = it.messages + ChatMsg(it.skillsMsg.ifBlank { "Skills updated" } + " (new context)", false)) }
+        }
+    }
 
     init {
+        refreshSkills()
         initEngine()
     }
 
@@ -107,11 +190,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                             )
                         )
                         e.initialize()
-                        val c = e.createConversation(
-                            ConversationConfig(
-                                samplerConfig = SamplerConfig(topK = 64, topP = 0.95, temperature = 1.0)
-                            )
-                        )
+                        val c = makeConversation(e)
                         engine = e; conversation = c
                         _ui.update {
                             it.copy(
@@ -163,6 +242,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         if (_ui.value.generating || text.isBlank()) return
         val msgs = _ui.value.messages + ChatMsg(text, true) + ChatMsg("", false, streaming = true)
         val idx = msgs.lastIndex
+        curIdx = idx
         _ui.update { it.copy(messages = msgs, generating = true) }
         val sb = StringBuilder()
         // Callback overload: the Flow overload crashes on a coroutines ABI mismatch.
@@ -170,7 +250,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             Contents.of(listOf(Content.Text(text))),
             object : MessageCallback {
                 override fun onMessage(message: Message) {
-                    sb.append(message.toString())
+                    if (message.toolCalls.isNotEmpty()) return   // tool turn: tools report themselves
+                    sb.append(
+                        if (store.skillsOn) message.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
+                        else message.toString()
+                    )
                     replace(idx) { it.copy(text = sb.toString()) }
                 }
 
@@ -237,6 +321,8 @@ fun ChatScreen(vm: ChatViewModel = viewModel()) {
         if (ui.messages.isNotEmpty()) list.animateScrollToItem(ui.messages.lastIndex)
     }
     val chatMode = ui.messages.isNotEmpty()
+    var showSkills by remember { mutableStateOf(false) }
+    if (showSkills) SkillsSheet(ui, vm) { showSkills = false; vm.applySkills() }
     Scaffold(
         containerColor = BG,
         bottomBar = {
@@ -247,7 +333,7 @@ fun ChatScreen(vm: ChatViewModel = viewModel()) {
         },
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(bottom = pad.calculateBottomPadding())) {
-            Header(ui, chatMode)
+            Header(ui, chatMode) { showSkills = true }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (!chatMode) {
                     Image(
@@ -281,7 +367,7 @@ fun ChatScreen(vm: ChatViewModel = viewModel()) {
 }
 
 @Composable
-private fun Header(ui: UiState, chatMode: Boolean) {
+private fun Header(ui: UiState, chatMode: Boolean, onSkills: () -> Unit) {
     val h = if (chatMode) 84.dp else 120.dp
     val inset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(Modifier.fillMaxWidth().height(h + inset)) {
@@ -290,7 +376,10 @@ private fun Header(ui: UiState, chatMode: Boolean) {
             Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.Bottom,
         ) {
-            Text("VTLo_unrestrict3d", color = TEXT, style = MaterialTheme.typography.titleLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("VTLo_unrestrict3d", color = TEXT, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                TextButton(onSkills) { Text(if (ui.skillsOn) "SKILLS ●" else "SKILLS", color = OLIVE) }
+            }
             if (ui.ready && ui.backend.isNotEmpty())
                 Text("● ${ui.backend}", color = OLIVE, style = MaterialTheme.typography.labelMedium)
         }
@@ -306,7 +395,7 @@ private fun Bubble(m: ChatMsg) {
             modifier = Modifier.widthIn(max = 320.dp),
         ) {
             Text(
-                m.text + if (m.streaming) " ▍" else "",
+                (if (m.tools.isNotEmpty()) m.tools + "\n" else "") + m.text + if (m.streaming) " ▍" else "",
                 Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                 color = TEXT, style = MaterialTheme.typography.bodyLarge
             )
@@ -360,6 +449,73 @@ private fun Hint(
         if (action != null) {
             Spacer(Modifier.height(16.dp))
             Button(onAction) { Text(action) }
+        }
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SkillsSheet(ui: UiState, vm: ChatViewModel, onClose: () -> Unit) {
+    var url by remember { mutableStateOf("") }
+    var mName by remember { mutableStateOf("") }
+    var mUrl by remember { mutableStateOf("") }
+    var mTok by remember { mutableStateOf("") }
+    val tree = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { u -> if (u != null) vm.importSkillTree(u) }
+    ModalBottomSheet(onDismissRequest = onClose, containerColor = Color(0xFF1A1A1C), contentColor = TEXT) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Skills & tools", color = TEXT, style = MaterialTheme.typography.titleMedium)
+                    Text("The model can load skills, run their scripts, start phone actions and call MCP tools.", color = TEXT, style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(ui.skillsOn, { vm.setSkillsOn(it) })
+            }
+            if (ui.skillsMsg.isNotBlank()) Text(ui.skillsMsg, color = OLIVE, style = MaterialTheme.typography.bodySmall)
+            Text("SKILLS", color = OLIVE, style = MaterialTheme.typography.labelMedium)
+            if (ui.skills.isEmpty()) Text("None yet. Add one by URL (folder with SKILL.md) or import a folder.", color = TEXT, style = MaterialTheme.typography.bodySmall)
+            ui.skills.forEach { sk ->
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(sk.enabled, { vm.toggleSkill(sk.name, it) })
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(sk.name, color = TEXT, style = MaterialTheme.typography.bodyMedium)
+                            Text(sk.description, color = TEXT, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                        }
+                        TextButton({ vm.deleteSkill(sk.name) }) { Text("✕", color = TEXT) }
+                    }
+                    if (sk.needsSecret) {
+                        var sec by remember(sk.name) { mutableStateOf(sk.secret) }
+                        OutlinedTextField(sec, { sec = it; vm.setSecret(sk.name, it) }, Modifier.fillMaxWidth(), singleLine = true,
+                            label = { Text(sk.secretHint.ifBlank { "Secret / API key" }) })
+                    }
+                }
+            }
+            OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Skill folder URL") })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button({ vm.addSkillUrl(url); url = "" }, enabled = url.isNotBlank() && !ui.skillsBusy) { Text("ADD FROM URL") }
+                OutlinedButton({ tree.launch(null) }, enabled = !ui.skillsBusy) { Text("IMPORT FOLDER") }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("MCP SERVERS (Streamable HTTP)", color = OLIVE, style = MaterialTheme.typography.labelMedium)
+            ui.mcp.forEach { m ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(m.name, color = TEXT, style = MaterialTheme.typography.bodyMedium)
+                        Text(m.url, color = TEXT, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                    }
+                    TextButton({ vm.delMcp(m.name) }) { Text("✕", color = TEXT) }
+                }
+            }
+            OutlinedTextField(mName, { mName = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Name") })
+            OutlinedTextField(mUrl, { mUrl = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("MCP URL") })
+            OutlinedTextField(mTok, { mTok = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Bearer token (optional)") })
+            Button({ vm.addMcp(mName, mUrl, mTok); mName = ""; mUrl = ""; mTok = "" }, enabled = mName.isNotBlank() && mUrl.isNotBlank()) { Text("ADD SERVER") }
+            Spacer(Modifier.height(4.dp))
+            Button(onClose, Modifier.fillMaxWidth()) { Text("APPLY") }
+            Text("Applying starts a fresh model context so the new tools are known.", color = TEXT, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
