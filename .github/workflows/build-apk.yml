@@ -1,5 +1,8 @@
 name: build-apk
-on: [push, workflow_dispatch]
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: write }
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -8,5 +11,11 @@ jobs:
       - uses: cachix/install-nix-action@v27
         with: { extra_nix_config: "experimental-features = nix-command flakes" }
       - run: nix develop --command bash -c 'export GRADLE_USER_HOME=$PWD/.gradle-home && gradle :app:assembleDebug --no-daemon'
+      - run: cp app/build/outputs/apk/debug/app-debug.apk VTLo_unrestrict3d-arm64.apk
       - uses: actions/upload-artifact@v4
-        with: { name: app-debug, path: app/build/outputs/apk/debug/app-debug.apk }
+        with: { name: app-debug, path: VTLo_unrestrict3d-arm64.apk }
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          files: VTLo_unrestrict3d-arm64.apk

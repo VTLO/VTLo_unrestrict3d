@@ -1,10 +1,20 @@
 <p align="center"><img src="docs/banner.gif" alt="VTLo_unrestrict3d" width="100%"></p>
 
+<p align="center">
+<a href="https://github.com/VTLO/VTLo_unrestrict3d/raw/main/releases/VTLo_unrestrict3d-arm64.apk"><b>⬇ Download APK</b></a> (arm64 · ~90 MB) ·
+<a href="https://github.com/VTLO/VTLo_unrestrict3d/releases/latest/download/VTLo_unrestrict3d-arm64.apk">Latest release APK</a> ·
+<a href="https://vtlo.github.io/VTLo_unrestrict3d/"><b>🌐 Web page</b></a>
+</p>
+
 # VTLo_unrestrict3d
 
 Minimal, crash-free Android chat app that runs a **LiteRT-LM** model fully offline (no INTERNET permission).
 GPU (with MTP speculative decoding when the model ships a drafter) and automatic CPU fallback.
 Animated header banner, plain dark readable chat.
+
+## Install
+Download the APK above, open it on your phone (allow unknown apps), then tap **IMPORT MODEL** and pick your `.litertlm`.
+SHA-256 of the committed APK: `29ad600a027feee29b0233f5c86db6f661bb24e0df7cdf2a107d47634de43203`
 
 ## Build
 `flake.nix` pins the whole toolchain (JDK 21, Gradle 9, Android SDK 37, AGP 9.2.1):
