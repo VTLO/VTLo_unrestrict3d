@@ -137,7 +137,10 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(rootOk = ok) }
             if (ok) RootTools.protectSelf()
         }
-        if (settings.autoLoadLast && settings.lastModelPath.isNotBlank()) {
+        if (downloader.isInstalled() && settings.lastModelPath != downloader.target.path) {
+            saveSettings(settings.copy(lastModelPath = downloader.target.path))
+        }
+        if (downloader.isInstalled() || (settings.autoLoadLast && settings.lastModelPath.isNotBlank())) {
             viewModelScope.launch { ensureLoaded() }
         }
     }

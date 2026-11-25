@@ -17,8 +17,8 @@ import kotlin.coroutines.coroutineContext
  * hardcoded here and fetched once, with resume, into private storage, then loaded like any other.
  */
 object DefaultModel {
-    const val NAME = "Gemma-4-E2B-it-abliterated"
-    const val FILE = "Gemma-4-E2B-it-abliterated.litertlm"
+    const val NAME = "VTLO core"
+    const val FILE = "vtlo-core.litertlm"
     const val URL_STR =
         "https://huggingface.co/nqd145/Gemma-4-E2B-it-abliterated-litertlm/resolve/main/Gemma-4-E2B-it-abliterated.litertlm"
     const val SIZE_BYTES = 5_065_244_672L

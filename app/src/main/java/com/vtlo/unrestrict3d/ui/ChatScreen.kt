@@ -341,7 +341,7 @@ private fun Footer(state: UiState, a: ChatActions) {
     }
 }
 
-private const val DEFAULT_LABEL = "GEMMA-4 E2B ABLITERATED"
+private const val DEFAULT_LABEL = "VTLO CORE"
 
 @Composable
 private fun CtaButton(label: String, onClick: () -> Unit, primary: Boolean = true) = Box(

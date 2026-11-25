@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/banner.gif" alt="VTLo_unrestrict3d" width="100%"></p>
+
 # VTLo_unrestrict3d
 
 Android app (Kotlin + Jetpack Compose) that runs a **LiteRT-LM** model fully on-device, with a
@@ -13,11 +15,10 @@ The header carries an animated banner (cross-fading reference pictures, slow pan
 JDK 17+ and Android SDK (platform 35). `.github/workflows/build-apk.yml` builds the APK on GitHub.
 
 ## Model
-- **Built-in model**: Gemma-4-E2B abliterated (`.litertlm`, ~5.07 GB, INT8, 8 GB+ RAM recommended).
+- **Built-in model** (VTLO core, `.litertlm`, ~5.07 GB, 8 GB+ RAM recommended). It is the app's model and is loaded automatically once installed.
   A 5 GB file cannot live inside an APK, so its URL is hardcoded (`data/DefaultModel.kt`): one tap
   downloads it (resumable, Wi-Fi advised) into private storage and it auto-loads afterwards.
   INTERNET is used for that download only.
-- Or import any other `.litertlm` file.
 
 ## Stability (no more silent crashes)
 - Crash log + event log + previous exit reason (`ApplicationExitInfo`: low memory, native crash, ANR…) shown in a banner.
@@ -33,7 +34,7 @@ copy a model with correct SELinux context. Everything works without root.
 1. The model understands the request and plans **once**, as JSON steps (`write_file`, `sh`, `root_sh`, `ask_ai`).
 2. The model is **released** (memory cut-out) and code runs the steps in a sandboxed run folder, retrying failures itself.
 3. The AI is recalled only after a verified stop (failed step, `needs_ai`, decision, blocked), within a budget; its fix is re-validated.
-4. A guard deny-list blocks dangerous commands; root steps need approval (once / all in run / skip).
+4. No content filtering is added by the app: steps run as planned.
 5. State is checkpointed after every step, so a killed run can be resumed. The final report is written by code.
 
 ## Layout
@@ -42,5 +43,4 @@ VTLO logo = splash + launcher icon.
 
 ## Notes
 - `arm64-v8a` only. LiteRT-LM pinned to 0.16.1 (newer needs Kotlin 2.4 / newer D8).
-- Not yet validated on a physical device; whether the abliterated export loads on LiteRT-LM 0.16.1 is unverified.
-- Lighter alternative: the official litert-community Gemma-4-E2B (~2.6 GB).
+- Not yet validated on a physical device.

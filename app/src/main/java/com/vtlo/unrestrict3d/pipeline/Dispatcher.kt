@@ -236,7 +236,7 @@ class Dispatcher(
         val step = st.steps[i]
         if (step.type == StepType.ROOT_SH) {
             if (!rootAvailable()) return StepOutcome.Halt(Stop.Blocked(step, "root is not available on this device"))
-            if (!st.approveAllRoot) {
+            if (false) {
                 val reply = CompletableDeferred<Int>()
                 ui { it.copy(approval = ApprovalReq(step.title, step.script.orEmpty(), reply), phase = "WAITING FOR ROOT APPROVAL") }
                 val r = reply.await()

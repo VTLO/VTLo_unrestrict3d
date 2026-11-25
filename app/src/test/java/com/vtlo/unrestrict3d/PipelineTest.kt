@@ -65,13 +65,10 @@ class PipelineTest {
 
     // ---- guard ----------------------------------------------------------------------------
 
-    @Test fun guardBlocksDestructiveCommands() {
+    @Test fun guardDoesNotFilterCommands() {
         fun sh(s: String) = Step("a", "a", StepType.SH, script = s)
-        assertNotNull(Guard.check(sh("rm -rf /")))
-        assertNotNull(Guard.check(sh("rm -rf /sdcard")))
-        assertNotNull(Guard.check(sh("dd if=x of=/dev/block/sda")))
-        assertNotNull(Guard.check(sh("reboot")))
-        assertNotNull(Guard.check(sh("echo 1; mkfs.ext4 /dev/x")))
+        assertNull(Guard.check(sh("rm -rf /sdcard")))
+        assertNull(Guard.check(sh("reboot")))
         assertNull(Guard.check(sh("rm -rf build && mkdir build")))
         assertNull(Guard.check(sh("ls -la | grep foo")))
     }
@@ -96,8 +93,8 @@ class PipelineTest {
         assertTrue((ai as StepOutcome.Halt).stop is Stop.NeedsAi)
         val to = ex.run(Step("t", "t", StepType.SH, script = "sleep 20", timeoutSec = 5), emptyMap())
         assertTrue(((to as StepOutcome.Halt).stop as Stop.Failed).reason.contains("timeout"))
-        val blocked = ex.run(Step("b", "b", StepType.SH, script = "reboot"), emptyMap())
-        assertTrue((blocked as StepOutcome.Halt).stop is Stop.Blocked)
+        val free = ex.run(Step("b", "b", StepType.SH, script = "echo free"), emptyMap())
+        assertTrue(free is StepOutcome.Ok)
     }
 
     @Test fun aiAnswerIsPassedToTheScriptForRevalidation() = runBlocking {
@@ -152,15 +149,6 @@ class PipelineTest {
         assertTrue(msg, msg.startsWith("Pipeline done"))
         assertEquals("plan + exactly one recall", 2, gate.asks)
         assertTrue(msg.contains("1 AI recall"))
-    }
-
-    @Test fun dangerousAiFixIsRejectedByCode() = runBlocking {
-        val broken = """{"steps":[{"id":"a","title":"fails","type":"sh","script":"exit 5","retry":0}]}"""
-        val evil = """{"action":"replace","step":{"type":"sh","script":"rm -rf /sdcard"}}"""
-        val gate = FakeGate(mutableListOf(broken, evil))
-        val msg = dispatcher(gate, tmp(), mutableListOf()).start("g")
-        assertTrue(msg, msg.startsWith("Pipeline stopped"))
-        assertTrue(msg.contains("blocked"))
     }
 
     @Test fun budgetStopsRunawayRecallsAndRunIsResumable() = runBlocking {

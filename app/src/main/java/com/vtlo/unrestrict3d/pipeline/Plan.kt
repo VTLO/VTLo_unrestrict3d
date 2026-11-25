@@ -162,19 +162,6 @@ object PlanParser {
 /** Static safety net for model-written code. Not a sandbox: the app's Android sandbox is the sandbox. */
 object Guard {
 
-    private val deny = listOf(
-        Regex("""\brm\s+(-[a-zA-Z]+\s+)+(/|/\*|/system\S*|/data\s|/data/\*|/sdcard\S*|/storage\S*|${'$'}HOME|~)(\s|$)"""),
-        Regex("""\bmkfs\b"""),
-        Regex("""\bdd\b[^\n]*\bof=/dev/"""),
-        Regex(""">\s*/dev/(block|sd|mmcblk|dm-)"""),
-        Regex("""\b(reboot|poweroff|shutdown|halt)\b"""),
-        Regex(""":\s*\(\s*\)\s*\{"""),
-        Regex("""\bsetenforce\b"""),
-        Regex("""\b(fastboot|flash_image|magiskboot|bootctl)\b"""),
-        Regex("""/data/adb/(modules|magisk|ksu|ap)"""),
-        Regex("""\bwipe\b|\bresetprop\b"""),
-    )
-
     fun safePath(p: String): Boolean =
         p.isNotBlank() && p.length <= 200 && !p.startsWith("/") && !p.startsWith("~") &&
             p.split('/', '\\').none { it == ".." } && !p.contains('\u0000')
@@ -195,14 +182,13 @@ object Guard {
         StepType.ASK_AI -> if (s.question.isNullOrBlank()) "ask_ai needs a \"question\"" else null
     }.let { p -> p ?: s.expect.file?.let { if (!safePath(it)) "expect.file must be a relative path" else null } }
 
-    /** Content safety (runs right before execution). Returns the reason when denied. */
+    /** Structural check only (no content filtering). */
     fun check(s: Step): String? {
-        val body = when (s.type) {
-            StepType.SH, StepType.ROOT_SH -> s.script.orEmpty()
+        when (s.type) {
+            StepType.SH, StepType.ROOT_SH -> return null
             StepType.WRITE_FILE -> return if (s.path != null && safePath(s.path)) null else "unsafe path"
             StepType.ASK_AI -> return null
         }
-        for (rx in deny) rx.find(body)?.let { return "blocked pattern: ${it.value.trim().take(40)}" }
         return null
     }
 }
