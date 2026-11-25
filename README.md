@@ -2,45 +2,23 @@
 
 # VTLo_unrestrict3d
 
-Android app (Kotlin + Jetpack Compose) that runs a **LiteRT-LM** model fully on-device, with a
-crash-proof memory layer and a *plan once, run as code, recall the AI only on a verified stop* pipeline.
-
-The header carries an animated banner (cross-fading reference pictures, slow pan/zoom, scan-lines, light sweep).
+Minimal, crash-free Android chat app that runs a **LiteRT-LM** model fully offline (no INTERNET permission).
+GPU (with MTP speculative decoding when the model ships a drafter) and automatic CPU fallback.
+Animated header banner, plain dark readable chat.
 
 ## Build
+`flake.nix` pins the whole toolchain (JDK 21, Gradle 9, Android SDK 37, AGP 9.2.1):
 ```
-./gradlew assembleDebug          # -> app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest      # 15 JVM tests for the pipeline
+nix develop --command bash -c 'export GRADLE_USER_HOME=$PWD/.gradle-home && gradle :app:assembleDebug'
+# -> app/build/outputs/apk/debug/app-debug.apk
 ```
-JDK 17+ and Android SDK (platform 35). `.github/workflows/build-apk.yml` builds the APK on GitHub.
+GitHub Actions builds it too (`.github/workflows/build-apk.yml`).
 
 ## Model
-- **Built-in model** (VTLO core, `.litertlm`, ~3.66 GB, 8 GB+ RAM recommended). It is the app's model and is loaded automatically once installed.
-  A 3.7 GB file cannot live inside an APK, so its URL is hardcoded (`data/DefaultModel.kt`): one tap
-  downloads it (resumable, Wi-Fi advised) into private storage and it auto-loads afterwards.
-  INTERNET is used for that download only.
-
-## Stability (no more silent crashes)
-- Crash log + event log + previous exit reason (`ApplicationExitInfo`: low memory, native crash, ANR…) shown in a banner.
-- Foreground service + wake lock while working; low-memory watchdog during generation; idle release of the model (lazy reload).
-- Context window defaults to 4096 (the model's 32k default is a likely crash cause).
-- **Context compression**: at 70% of the window the conversation is summarised into a compact memory, then the old turns are dropped.
-
-## Root (optional, opt-in)
-Raise the app's `oom_score_adj`, renice, drop caches, compact memory, kill background apps, list top memory users,
-copy a model with correct SELinux context. Everything works without root.
-
-## Auto pipeline (REcod3r-style "coding economy")
-1. The model understands the request and plans **once**, as JSON steps (`write_file`, `sh`, `root_sh`, `ask_ai`).
-2. The model is **released** (memory cut-out) and code runs the steps in a sandboxed run folder, retrying failures itself.
-3. The AI is recalled only after a verified stop (failed step, `needs_ai`, decision, blocked), within a budget; its fix is re-validated.
-4. No content filtering is added by the app: steps run as planned.
-5. State is checkpointed after every step, so a killed run can be resumed. The final report is written by code.
-
-## Layout
-Home screen = the studio robot pointing at you; chat = plain darkest grey with high-contrast text.
-VTLO logo = splash + launcher icon.
+Install the app, open it, tap **IMPORT MODEL** and pick your `.litertlm` file (it is copied into the app's private
+files dir). Or copy it yourself to `/sdcard/Android/data/com.vtlo.unrestrict3d/files/model.litertlm`
+and reopen. Loading happens once, on GPU first, CPU if the driver refuses.
 
 ## Notes
-- `arm64-v8a` only. LiteRT-LM pinned to 0.16.1 (newer needs Kotlin 2.4 / newer D8).
-- Not yet validated on a physical device.
+- LiteRT-LM 0.20.0, `maxNumTokens = 4096`, sampler topK 64 / topP 0.95 / temperature 1.0 (edit in `MainActivity.kt`).
+- minSdk 31 (Android 12+), arm64 + x86_64.

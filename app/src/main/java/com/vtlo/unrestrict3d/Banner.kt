@@ -1,4 +1,4 @@
-package com.vtlo.unrestrict3d.ui
+package com.vtlo.unrestrict3d
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
@@ -43,7 +43,7 @@ private val VBIAS = floatArrayOf(0f, 0.15f, -0.1f, 0f)
  * text readable and fades the banner into the screen background.
  */
 @Composable
-fun AnimatedBanner(modifier: Modifier = Modifier, scrimTo: Color = Vtlo.Chat) {
+fun AnimatedBanner(modifier: Modifier = Modifier, scrimTo: Color = Color(0xFF111112)) {
     var idx by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         while (true) { delay(4800); idx = (idx + 1) % BANNERS.size }
